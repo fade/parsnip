@@ -35,15 +35,23 @@
            #:prog1!
            #:prog2!
            #:or!
+           #:choice
 
            #:collect
            #:collect1
            #:collect-into-string
            #:sep
+           #:many-till
 
            #:reduce!
            #:skip
            #:skip-many
+
+           #:optional
+           #:lookahead
+           #:not-followed-by
+           #:chainl1
+           #:chainr1
 
            #:digit
            #:natural
@@ -321,6 +329,10 @@ TRY! only works when the parser is given a seekable stream."
                              (declare (ignore eok cok cfail))
                              (funcall efail pstream () ())))))
 
+(defun choice (parsers)
+  "Return a parser that tries each parser in the list of `parsers` in order."
+  (apply #'or! parsers))
+
 (defun collect (parser)
   "Return a parser that runs the given parser until failure, and collects all results into a list."
   (let@ ((items ()))
@@ -363,6 +375,14 @@ TRY! only works when the parser is given a seekable stream."
                                 value-parser))))
     (ok (list* first rest))))
 
+(defun many-till (parser end)
+  "Return a parser that applies `parser` zero or more times until `end` succeeds.
+Returns a list of the results from `parser`."
+  (or! (let! (_ (try! end)) (ok '()))
+       (let! ((x parser)
+              (xs (many-till parser end)))
+         (ok (cons x xs)))))
+
 (defun reduce! (function parser &key initial-parser)
   "Return a parser that keeps running until failure, and reduces its results into one value.
 If INITIAL-PARSER is supplied, the parser may succeed without calling FUNCTION by returning INITIAL-PARSER's response."
@@ -391,6 +411,74 @@ If INITIAL-PARSER is supplied, the parser may succeed without calling FUNCTION b
                        (@))
                      (skip parser))
             (constantly (ok nil)))))
+
+(defun optional (parser)
+  "Return a parser that tries the given parser, and returns its result on success, or NIL on an empty failure."
+  (or! parser (ok nil)))
+
+(defun lookahead (parser)
+  "Return a parser that runs the given parser without consuming any input.
+Requires a seekable stream."
+  (lambda (pstream eok cok efail cfail)
+    (let ((snapshot (save pstream)))
+      (funcall parser pstream
+               (lambda (pstream* value)
+                 (rewind pstream* snapshot)
+                 (funcall eok pstream* value))
+               (lambda (pstream* value)
+                 (rewind pstream* snapshot)
+                 (funcall eok pstream* value))
+               efail
+               (lambda (pstream* expected trace)
+                 (rewind pstream* snapshot)
+                 (funcall efail pstream* expected trace))))))
+
+(defun not-followed-by (parser)
+  "Return a parser that succeeds if the given parser fails, and fails if it succeeds.
+This parser never consumes input. Requires a seekable stream."
+  (lambda (pstream eok cok efail cfail)
+    (declare (ignore cok))
+    (let ((snapshot (save pstream)))
+      (funcall parser pstream
+               (lambda (pstream* value)
+                 (declare (ignore value))
+                 (rewind pstream* snapshot)
+                 (funcall efail pstream* "something else" ()))
+               (lambda (pstream* value)
+                 (declare (ignore value))
+                 (rewind pstream* snapshot)
+                 (funcall efail pstream* "something else" ()))
+               (lambda (pstream* expected trace)
+                 (declare (ignore expected trace))
+                 (rewind pstream* snapshot)
+                 (funcall eok pstream* nil))
+               (lambda (pstream* expected trace)
+                 (declare (ignore expected trace))
+                 (rewind pstream* snapshot)
+                 (funcall eok pstream* nil))))))
+
+(defun chainl1 (p op)
+  "Parse one or more occurrences of `p`, separated by `op`.
+Returns a value obtained by a left-associative application of all functions
+returned by `op` to the values returned by `p`."
+  (let* ((rest (lambda (x)
+                 (or! (let! ((f op)
+                             (y p))
+                        (funcall rest (funcall f x y)))
+                      (ok x)))))
+    (let! ((x p)) (funcall rest x))))
+
+(defun chainr1 (p op)
+  "Parse one or more occurrences of `p`, separated by `op`.
+Returns a value obtained by a right-associative application of all functions
+returned by `op` to the values returned by `p`."
+  (let! ((x p)
+         (rest (or! (let! ((f op)
+                           (y (chainr1 p op)))
+                      (ok (funcall f x y)))
+                    (ok x))))
+    rest))
+
 
 ;; Toplevel parsers
 

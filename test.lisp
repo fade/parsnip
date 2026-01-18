@@ -619,3 +619,71 @@
                                 :parsnip/examples
                                 #P"examples/tiny-c.c"))
           (parse-tiny-c file))))
+
+;;; New Combinator Tests
+
+(t:define-test choice
+  :depends-on (or!)
+  (let ((a-or-b-or-c (choice (list (char-of #\a)
+                                 (char-of #\b)
+                                 (char-of #\c)))))
+    (t:is char= #\a (parse-string a-or-b-or-c "a"))
+    (t:is char= #\b (parse-string a-or-b-or-c "b"))
+    (t:is char= #\c (parse-string a-or-b-or-c "c"))
+    (t:fail (parse-string a-or-b-or-c "d") 'parser-error)))
+
+(t:define-test many-till
+  :depends-on (collect try!)
+  (let ((parser (many-till (char-of #\a) (char-of #\b))))
+    (t:is equal '(#\a #\a) (parse-string parser "aab"))
+    (t:is equal '() (parse-string parser "b"))
+    (t:fail (parse-string parser "aa") 'parser-error)))
+
+(t:define-test optional
+  :depends-on (or! ok)
+  (let ((parser (optional (string-of "hello"))))
+    (t:is string= "hello" (parse-string parser "hello"))
+    (t:is eq nil (parse-string parser "world"))
+    (t:is eq nil (parse-string parser ""))))
+
+(t:define-test lookahead
+  :depends-on (try!)
+  (let ((parser (let! ((a (lookahead (string-of "abc")))
+                       (b (string-of "abc")))
+                  (ok (list a b)))))
+    (t:is equal '("abc" "abc") (parse-string parser "abc")))
+  (let ((parser (lookahead (string-of "a"))))
+    (with-input-from-string (s "a")
+      (parse parser s)
+      (t:is char= #\a (read-char s)))))
+
+(t:define-test not-followed-by
+  :depends-on (try! ok fail)
+  (let ((parser (prog1! (string-of "a")
+                        (not-followed-by (string-of "b")))))
+    (t:is string= "a" (parse-string parser "ac"))
+    (t:fail (parse-string parser "ab") 'parser-error))
+  (with-input-from-string (s "a")
+    (parse (not-followed-by (string-of "b")) s)
+    (t:is char= #\a (read-char s))))
+
+(t:define-test chainl1
+  :depends-on (or! let! ok digit)
+  (let ((expr (chainl1 (natural)
+                       (choice (list (prog2! (char-of #\+) (ok #'+))
+                                     (prog2! (char-of #\-) (ok #'-)))))))
+    (t:is = 10 (parse-string expr "10"))
+    (t:is = 15 (parse-string expr "10+5"))
+    (t:is = 8 (parse-string expr "10-2"))
+    (t:is = 6 (parse-string expr "10-2-2"))))
+
+(t:define-test chainr1
+  :depends-on (or! let! ok digit)
+  (let* ((pow (lambda (b e) (expt b e)))
+         (pow-op (prog2! (char-of #\^) (ok pow)))
+         (expr (chainr1 (natural) pow-op)))
+    (t:is = 10 (parse-string expr "10"))
+    (t:is = 1000 (parse-string expr "10^3"))
+    (t:is = 256 (parse-string expr "4^2^2")) ; 4^(2^2), not (4^2)^2
+    ))
+
