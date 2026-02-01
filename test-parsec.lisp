@@ -1,5 +1,7 @@
 ;;; test-parsec.lisp - Tests for Parsec-compatible combinators
-;;;
+
+;;; Copyright 2021 Samuel Hunter <samuel (at) shunter (dot) xyz>
+;;; Copyright 2026 Brian O'Reilly <fade@deepsky.com>
 ;;; BSD-3-Clause
 
 (in-package #:cl-user)

@@ -1,6 +1,7 @@
 ;;; parsnip.lisp - Parsnip library implementation
 
 ;;; Copyright 2021 Samuel Hunter <samuel (at) shunter (dot) xyz>
+;;; Copyright 2026 Brian O'Reilly <fade@deepsky.com>
 ;;; BSD-3-Clause
 
 (defpackage #:xyz.shunter.parsnip
@@ -636,11 +637,6 @@ returned by `op` to the values returned by `p`."
   (reduce! (lambda (number d)
              (+ (* number radix) d))
            (digit radix)))
-
-
-;;;
-;;; Additions by Brian O'Reilly <fade@deepsky.com>
-;;;
 
 (defun any-char ()
   "Parses any single character."

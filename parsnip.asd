@@ -1,6 +1,7 @@
 ;;; parsnip.asd - Parsnip library system definitions
 
 ;;; Copyright 2021 Samuel Hunter <samuel (at) shunter (dot) xyz>
+;;; Copyright 2026 Brian O'Reilly <fade@deepsky.com>
 ;;; BSD-3-Clause
 
 (asdf:defsystem #:parsnip

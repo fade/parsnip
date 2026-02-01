@@ -1,6 +1,7 @@
 ;;; test.lisp - Parsnip library test suite
 
 ;;; Copyright 2021 Samuel Hunter <samuel (at) shunter (dot) xyz>
+;;; Copyright 2026 Brian O'Reilly <fade@deepsky.com>
 ;;; BSD-3-Clause
 
 (defpackage #:xyz.shunter.parsnip.test
@@ -30,8 +31,6 @@
   (let ((difference (abs (/ (- float-1 float-2) (abs (+ float-1 float-2)) 2)))
         (tolerance 0.0005))
     (< difference tolerance)))
-
-
 
 ;; Unit Tests
 
