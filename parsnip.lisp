@@ -472,15 +472,8 @@ TRY! only works when the parser is given a seekable stream."
 
 (defun collect-into-string (char-parser)
   "Return a parser that runs the given character parser until failure, and collects all characters into a string."
-  (let ((out (make-string-output-stream)))
-    (let@ ()
-      (handle
-        (let! ((c char-parser))
-          (write-char c out)
-          (@))
-        (lambda (expected trace)
-          (declare (ignore expected trace))
-          (ok (get-output-stream-string out)))))))
+  (let! ((chars (many char-parser)))
+    (ok (coerce chars 'string))))
 
 (defun sep (value-parser sep-parser)
   "Return a parser that accepts a sequence of VALUE-PARSER input separated by SEP-PARSER input; such as values separated by commas."
@@ -719,9 +712,8 @@ returned by `op` to the values returned by `p`."
 
 (defun digits1 ()
   "Parse one or more digits and return as a string."
-  (let! ((first (a-digit-char))
-         (rest (collect-into-string (a-digit-char))))
-    (ok (concatenate 'string (string first) rest))))
+  (let! ((chars (many1 (a-digit-char))))
+    (ok (coerce chars 'string))))
 
 (defun a-float ()
   "Parses a floating-point number."
@@ -1042,7 +1034,7 @@ Returns a TOKEN-PARSER structure with parser functions for common token types."
        :natural (funcall lexeme-fn (natural))
        :integer (funcall lexeme-fn (an-integer))
        :float (funcall lexeme-fn (a-float))
-       :natural-or-float (funcall lexeme-fn (make-natural-or-float-parser))
+       :natural-or-float (funcall lexeme-fn (or! (try! (a-float)) (an-integer)))
        :decimal (funcall lexeme-fn (natural 10))
        :hexadecimal (funcall lexeme-fn (progn! (string-of "0x") (natural 16)))
        :octal (funcall lexeme-fn (progn! (string-of "0o") (natural 8)))
@@ -1152,19 +1144,10 @@ Returns a TOKEN-PARSER structure with parser functions for common token types."
 (defun make-string-literal-parser ()
   "Create a string literal parser."
   (between (char-of #\")
-           (collect-into-string
-            (collect (or! (progn! (char-of #\\) (escape-char))
-                          (char-if (lambda (c) (and (char/= c #\") (char/= c #\\)))))))
+           (let! ((chars (many (or! (progn! (char-of #\\) (escape-char))
+                                   (char-if (lambda (c) (and (char/= c #\") (char/= c #\\))))))))
+             (ok (coerce chars 'string)))
            (char-of #\")))
-
-(defun make-natural-or-float-parser ()
-  "Create a parser that returns either an integer or float."
-  (let! ((n (collect-into-string (collect1 (digit)))))
-    (or! (let! ((_dot (char-of #\.))
-                (frac (collect-into-string (collect1 (digit)))))
-           _dot  ; suppress unused warning
-           (ok (read-from-string (concatenate 'string n "." frac))))
-         (ok (parse-integer n)))))
 
 (defmacro deftoken (name lang-def accessor)
   "Define a function NAME that returns the ACCESSOR parser from a token-parser."
