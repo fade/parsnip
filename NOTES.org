@@ -10,55 +10,55 @@ This document tracks the effort to add missing Parsec combinators and features t
 
 ** What Parsnip Already Has (Parsec Equivalents)
 
-| Parsnip           | Parsec          | Notes                    |
-|-------------------+-----------------+--------------------------|
-| ok                | return/pure     | ✓                        |
-| fail              | parserFail      | ✓                        |
-| char-if           | satisfy         | ✓                        |
-| char-of           | char            | ✓                        |
-| char-in           | oneOf           | ✓                        |
-| none-of           | noneOf          | ✓                        |
-| string-of         | string          | ✓                        |
-| eof               | eof             | ✓                        |
-| any-char          | anyChar         | ✓                        |
-| a-space           | space           | ✓                        |
-| spaces            | spaces          | ✓                        |
-| newline           | newline         | ✓                        |
-| tab               | tab             | ✓                        |
-| upper             | upper           | ✓                        |
-| lower             | lower           | ✓                        |
-| alpha-num         | alphaNum        | ✓                        |
-| letter            | letter          | ✓                        |
-| hex-digit         | hexDigit        | ✓                        |
-| oct-digit         | octDigit        | ✓                        |
-| crlf              | crlf            | ✓                        |
-| end-of-line       | endOfLine       | ✓                        |
-| flatmap           | >>= (bind)      | ✓                        |
-| let!              | do notation     | ✓                        |
-| try!              | try             | ✓                        |
-| or!               | <\vert>         | ✓                        |
-| choice            | choice          | ✓                        |
-| between           | between         | ✓                        |
-| collect/many      | many            | ✓                        |
-| collect1/many1    | many1           | ✓                        |
-| sep-by            | sepBy           | ✓                        |
-| sep               | sepBy1          | ✓ (different name)       |
-| end-by            | endBy           | ✓                        |
-| end-by1           | endBy1          | ✓                        |
-| parse-count       | count           | ✓                        |
-| many-till         | manyTill        | ✓                        |
-| skip-many         | skipMany        | ✓                        |
-| optional          | optionMaybe     | ✓ (returns nil vs Maybe) |
-| lookahead         | lookAhead       | ✓                        |
-| not-followed-by   | notFollowedBy   | ✓                        |
-| chainl            | chainl          | ✓                        |
-| chainl1           | chainl1         | ✓                        |
-| chainr            | chainr          | ✓                        |
-| chainr1           | chainr1         | ✓                        |
-| digit             | digit           | Parsnip supports radix   |
-| natural           | (in Token)      | ✓                        |
-| an-integer        | (in Token)      | ✓                        |
-| a-float           | (in Token)      | ✓                        |
+| Parsnip         | Parsec        | Notes                    |
+|-----------------+---------------+--------------------------|
+| ok              | return/pure   | ✓                        |
+| fail            | parserFail    | ✓                        |
+| char-if         | satisfy       | ✓                        |
+| char-of         | char          | ✓                        |
+| char-in         | oneOf         | ✓                        |
+| none-of         | noneOf        | ✓                        |
+| string-of       | string        | ✓                        |
+| eof             | eof           | ✓                        |
+| any-char        | anyChar       | ✓                        |
+| a-space         | space         | ✓                        |
+| spaces          | spaces        | ✓                        |
+| newline         | newline       | ✓                        |
+| tab             | tab           | ✓                        |
+| upper           | upper         | ✓                        |
+| lower           | lower         | ✓                        |
+| alpha-num       | alphaNum      | ✓                        |
+| letter          | letter        | ✓                        |
+| hex-digit       | hexDigit      | ✓                        |
+| oct-digit       | octDigit      | ✓                        |
+| crlf            | crlf          | ✓                        |
+| end-of-line     | endOfLine     | ✓                        |
+| flatmap         | >>= (bind)    | ✓                        |
+| let!            | do notation   | ✓                        |
+| try!            | try           | ✓                        |
+| or!             | <\vert>       | ✓                        |
+| choice          | choice        | ✓                        |
+| between         | between       | ✓                        |
+| collect/many    | many          | ✓                        |
+| collect1/many1  | many1         | ✓                        |
+| sep-by          | sepBy         | ✓                        |
+| sep             | sepBy1        | ✓ (different name)       |
+| end-by          | endBy         | ✓                        |
+| end-by1         | endBy1        | ✓                        |
+| parse-count     | count         | ✓                        |
+| many-till       | manyTill      | ✓                        |
+| skip-many       | skipMany      | ✓                        |
+| optional        | optionMaybe   | ✓ (returns nil vs Maybe) |
+| lookahead       | lookAhead     | ✓                        |
+| not-followed-by | notFollowedBy | ✓                        |
+| chainl          | chainl        | ✓                        |
+| chainl1         | chainl1       | ✓                        |
+| chainr          | chainr        | ✓                        |
+| chainr1         | chainr1       | ✓                        |
+| digit           | digit         | Parsnip supports radix   |
+| natural         | (in Token)    | ✓                        |
+| an-integer      | (in Token)    | ✓                        |
+| a-float         | (in Token)    | ✓                        |
 
 ** What Parsec Has That Parsnip Lacks
 
@@ -180,28 +180,59 @@ Note: JSON example tests have pre-existing failures unrelated to new features.
 
 The ~parsnip/test-parsec~ system provides coverage for all new Parsec-compatible combinators:
 
-| Feature                    | Test Name                           | What's Tested                                    |
-|----------------------------+-------------------------------------+--------------------------------------------------|
-| ~label~                    | parsec.label                        | Error message replacement, success passthrough   |
-| ~unexpected~               | parsec.unexpected                   | Failure with "unexpected" message                |
-| ~option~                   | parsec.option                       | Default value on failure, parsed value on success |
-| ~sep-end-by~               | parsec.sep-end-by                   | Zero/one/many items, trailing separator optional |
-| ~sep-end-by1~              | parsec.sep-end-by1                  | One or more items, trailing separator optional   |
-| ~skip-many1~               | parsec.skip-many1                   | Requires at least one match, returns nil         |
-| ~get-line~                 | parsec.get-line                     | Line tracking across newlines                    |
-| ~get-column~               | parsec.get-column                   | Column tracking (char-based parsers only)        |
-| ~get-position~             | parsec.get-position                 | Full position tuple                              |
-| ~build-expression-parser~  | parsec.expression-parser-basic      | Simple left-associative operators                |
-|                            | parsec.expression-parser-precedence | Operator precedence levels                       |
-|                            | parsec.expression-parser-prefix     | Prefix unary operators                           |
-|                            | parsec.expression-parser-right-assoc| Right-associative operators (exponentiation)     |
-| ~make-token-parser~        | parsec.token-parser-basic           | Natural, integer, symbol parsing                 |
-| ~permute~                  | parsec.permute-basic                | Parse elements in any order                      |
-|                            | parsec.permute-optional             | Optional elements with defaults                  |
-| ~parser-trace~             | parsec.parser-trace                 | Debug output, no input consumption               |
-| ~parser-traced~            | parsec.parser-traced                | Wrapped parser tracing                           |
+| Feature                 | Test Name                            | What's Tested                                     |
+|-------------------------+--------------------------------------+---------------------------------------------------|
+| ~label~                   | parsec.label                         | Error message replacement, success passthrough    |
+| ~unexpected~              | parsec.unexpected                    | Failure with "unexpected" message                 |
+| ~option~                  | parsec.option                        | Default value on failure, parsed value on success |
+| ~sep-end-by~              | parsec.sep-end-by                    | Zero/one/many items, trailing separator optional  |
+| ~sep-end-by1~             | parsec.sep-end-by1                   | One or more items, trailing separator optional    |
+| ~skip-many1~              | parsec.skip-many1                    | Requires at least one match, returns nil          |
+| ~get-line~                | parsec.get-line                      | Line tracking across newlines                     |
+| ~get-column~              | parsec.get-column                    | Column tracking (char-based parsers only)         |
+| ~get-position~            | parsec.get-position                  | Full position tuple                               |
+| ~build-expression-parser~ | parsec.expression-parser-basic       | Simple left-associative operators                 |
+|                         | parsec.expression-parser-precedence  | Operator precedence levels                        |
+|                         | parsec.expression-parser-prefix      | Prefix unary operators                            |
+|                         | parsec.expression-parser-right-assoc | Right-associative operators (exponentiation)      |
+| ~make-token-parser~       | parsec.token-parser-basic            | Natural, integer, symbol parsing                  |
+| ~permute~                 | parsec.permute-basic                 | Parse elements in any order                       |
+|                         | parsec.permute-optional              | Optional elements with defaults                   |
+| ~parser-trace~            | parsec.parser-trace                  | Debug output, no input consumption                |
+| ~parser-traced~           | parsec.parser-traced                 | Wrapped parser tracing                            |
 
 *** Known Limitations
 
 - ~string-of~ uses ~read-sequence~ for performance and does not update line/column tracking per-character
 - User state management not implemented (would require significant API changes to thread state through all parsers)
+
+*** Caveats
+
+I have updated parsnip to bring it in-line with the facilities defined
+in the Haskell system called parsec. In doing so, I have broadened the
+surface area of parsnip, and increased the complexity in the system. I
+have endeavoured to add test coverage for all of these components, in
+line with the standards defined by the base system in Samuel Hunter's
+master branch on sourcehut, but it is unclear to me how I will
+proceed. I would like to contribute the changes upstream, but I don't
+have the time to figure out how to get emacs to spit out a patch in
+unified diff format, or follow the procedure for sending this patch to
+SourceHut at the moment. Perhaps I will email Samuel Hunter and ask
+him if he would even be open to that. Regardless, all of this code is
+open source under the terms of the original license (BSD 3 Clause), so
+you may do with it what you want. My concern is that I have stretched
+the system beyond the original author's desired shape. Some of this
+was to scratch my own itch, which was parsing m3u files (an
+ill-specified format by consensus of what exists in the world) and
+partly to bootstrap my own understanding of parser/combinators. In
+pursuit of the later, almost all of the pedagogy that I found was
+written in the terms of Haskell in general and Parsec in particular,
+so I extended parsnip to match parsec (as much as possible) as I went,
+such that my excercise solutions would at least match the source
+material. I believe this has resulted in a system with more
+convenience and utility, but obviously all of the exciting new bugs
+are my own. Probably you shouldn't bother Samuel Hunter about them.
+Send issues/patch requests/messages via the facilities of the place
+where you found this code.
+
+-Brian O'Reilly, February 1, 2026.
