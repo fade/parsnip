@@ -79,3 +79,20 @@
   :components ((:file "test-parsec"))
   :perform (asdf:test-op (op c)
              (uiop:symbol-call :parachute :test :xyz.shunter.parsnip.test-parsec)))
+
+(asdf:defsystem #:parsnip/test-all
+  :description "Run all Parsnip test suites"
+  :author "Brian O'Reilly <fade@deepsky.com>"
+  :license "BSD 3-Clause"
+  :version "0.0.7"
+
+  :depends-on (#:parsnip/test
+               #:parsnip/test-json
+               #:parsnip/test-literals
+               #:parsnip/test-parsec)
+  :perform (asdf:test-op (op c)
+             (uiop:symbol-call :parachute :test
+                               '(:xyz.shunter.parsnip.test
+                                 :xyz.shunter.parsnip.test-json
+                                 :xyz.shunter.parsnip.test-literals
+                                 :xyz.shunter.parsnip.test-parsec))))
