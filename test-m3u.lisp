@@ -46,7 +46,8 @@
 #EXTINF:-1,Unknown Duration
 /path.mp3
 ")))
-    (is = 1 (m3u:m3u-track-duration (first (m3u:m3u-playlist-tracks playlist))))))
+    ;; -1 indicates indefinite duration (typically a live stream)
+    (is = -1 (m3u:m3u-track-duration (first (m3u:m3u-playlist-tracks playlist))))))
 
 (define-test multiple-tracks
   :parent m3u-parser
@@ -117,7 +118,7 @@
     ;; Verify first track
     (let ((first-track (first (m3u:m3u-playlist-tracks playlist))))
       (is string= "Underworld - Born Slippy (Nuxx)" (m3u:m3u-track-title first-track))
-      (is = 1 (m3u:m3u-track-duration first-track))) ; -1 parses as 1
+      (is = -1 (m3u:m3u-track-duration first-track))) ; -1 = indefinite/live stream
     ;; Verify last track
     (let ((last-track (alexandria:lastcar (m3u:m3u-playlist-tracks playlist))))
       (is string= "Underworld - Jumbo" (m3u:m3u-track-title last-track)))))

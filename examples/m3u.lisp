@@ -107,7 +107,9 @@
 
 (defparser extinf-line ()
   (let! ((_ (string-of "#EXTINF:"))
-         (duration (or! 'expr-parser (progn! (char-of #\-) (natural))))
+         (duration (or! 'expr-parser
+                        (let! ((_ (char-of #\-)) (n (natural)))
+                          (ok (- n)))))
          (_ (char-of #\,))
          (chars (many-till (any-char) (lookahead (end-of-line)))))
     (ok (list :duration duration :title (coerce chars 'string)))))
@@ -186,7 +188,7 @@
         (format t "    Duration: ~A seconds~%" (m3u-track-duration track))
         (format t "    Path: ~A~%" (m3u-track-path track)))
       (assert (= (m3u-track-duration (first (m3u-playlist-tracks playlist))) 225))
-      (assert (= (m3u-track-duration (second (m3u-playlist-tracks playlist))) 1))
+      (assert (= (m3u-track-duration (second (m3u-playlist-tracks playlist))) -1))
       (assert (= (m3u-track-duration (third (m3u-playlist-tracks playlist))) 180))
       (format t "~%--- Example Finished Successfully ---~%"))))
 
