@@ -93,6 +93,18 @@
   :perform (asdf:test-op (op c)
              (uiop:symbol-call :parachute :test :xyz.shunter.parsnip.test-m3u)))
 
+(asdf:defsystem #:parsnip/test-tiny-c
+  :description "Test suite for the tiny-c parser example"
+  :author "Brian O'Reilly <fade@deepsky.com>"
+  :license "BSD 3-Clause"
+  :version "0.0.7"
+
+  :depends-on (#:parsnip/examples
+               #:parachute)
+  :components ((:file "test-tiny-c"))
+  :perform (asdf:test-op (op c)
+             (uiop:symbol-call :parachute :test :xyz.shunter.parsnip.test-tiny-c)))
+
 (asdf:defsystem #:parsnip/test-all
   :description "Run all Parsnip test suites"
   :author "Brian O'Reilly <fade@deepsky.com>"
@@ -103,11 +115,13 @@
                #:parsnip/test-json
                #:parsnip/test-literals
                #:parsnip/test-parsec
-               #:parsnip/test-m3u)
+               #:parsnip/test-m3u
+               #:parsnip/test-tiny-c)
   :perform (asdf:test-op (op c)
              (uiop:symbol-call :parachute :test
                                '(:xyz.shunter.parsnip.test
                                  :xyz.shunter.parsnip.test-json
                                  :xyz.shunter.parsnip.test-literals
                                  :xyz.shunter.parsnip.test-parsec
-                                 :xyz.shunter.parsnip.test-m3u))))
+                                 :xyz.shunter.parsnip.test-m3u
+                                 :xyz.shunter.parsnip.test-tiny-c))))
