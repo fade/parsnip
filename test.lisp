@@ -521,6 +521,125 @@
 
     
 
+(t:define-test none-of
+  :depends-on (char-if)
+  (t:is char= #\z
+        (parse-string (none-of "abc") "z"))
+  (t:is char= #\1
+        (parse-string (none-of "abc") "1"))
+  (t:fail (parse-string (none-of "abc") "a")
+          'parser-error)
+  (t:fail (parse-string (none-of "abc") "b")
+          'parser-error)
+  (t:fail (parse-string (none-of "abc") "c")
+          'parser-error)
+  (t:fail (parse-string (none-of "abc") "")
+          'parser-error)
+  ;; Works with vectors too
+  (t:is char= #\d
+        (parse-string (none-of #(#\a #\b #\c)) "d"))
+  (t:fail (parse-string (none-of #(#\a #\b #\c)) "a")
+          'parser-error))
+
+(t:define-test between
+  :depends-on (char-of)
+  (t:is char= #\b
+        (parse-string (between (char-of #\() (char-of #\b) (char-of #\))) "(b)"))
+  (t:fail (parse-string (between (char-of #\() (char-of #\b) (char-of #\))) "b)")
+          'parser-error)
+  (t:fail (parse-string (between (char-of #\() (char-of #\b) (char-of #\))) "(b")
+          'parser-error)
+  ;; Works with string parsers
+  (t:is string= "hello"
+        (parse-string (between (char-of #\[) (string-of "hello") (char-of #\])) "[hello]")))
+
+(t:define-test sep-by
+  :depends-on (sep)
+  (let ((as (sep-by (char-of #\a) (char-of #\,))))
+    ;; Zero items is ok (unlike sep)
+    (t:is equal '()
+          (parse-string as ""))
+    (t:is equal '()
+          (parse-string as "z"))
+    ;; One or more
+    (t:is equal '(#\a)
+          (parse-string as "a"))
+    (t:is equal '(#\a #\a #\a)
+          (parse-string as "a,a,a"))))
+
+(t:define-test end-by
+  :depends-on (collect)
+  (let ((as (end-by (char-of #\a) (char-of #\;))))
+    ;; Zero items
+    (t:is equal '()
+          (parse-string as ""))
+    (t:is equal '()
+          (parse-string as "z"))
+    ;; Items must be followed by separator
+    (t:is equal '(#\a)
+          (parse-string as "a;"))
+    (t:is equal '(#\a #\a #\a)
+          (parse-string as "a;a;a;"))
+    ;; Without trailing sep on last item, it's a consumed failure
+    (t:fail (parse-string as "a;a")
+            'parser-error)))
+
+(t:define-test end-by1
+  :depends-on (collect1)
+  (let ((as (end-by1 (char-of #\a) (char-of #\;))))
+    ;; Must have at least one
+    (t:fail (parse-string as "")
+            'parser-error)
+    (t:fail (parse-string as "z")
+            'parser-error)
+    ;; One or more
+    (t:is equal '(#\a)
+          (parse-string as "a;"))
+    (t:is equal '(#\a #\a)
+          (parse-string as "a;a;"))))
+
+(t:define-test parse-count
+  :depends-on (char-of)
+  ;; Zero count returns empty list
+  (t:is equal '()
+        (parse-string (parse-count 0 (char-of #\a)) "aaa"))
+  ;; Exact count
+  (t:is equal '(#\a)
+        (parse-string (parse-count 1 (char-of #\a)) "aaa"))
+  (t:is equal '(#\a #\a #\a)
+        (parse-string (parse-count 3 (char-of #\a)) "aaa"))
+  ;; Fails if not enough input
+  (t:fail (parse-string (parse-count 3 (char-of #\a)) "aa")
+          'parser-error)
+  ;; Doesn't consume more than N
+  (t:is equal '(#\a #\a)
+        (parse-string (parse-count 2 (char-of #\a)) "aaaa")))
+
+(t:define-test chainl
+  :depends-on (chainl1)
+  (let ((expr (chainl (natural)
+                      (prog2! (char-of #\+) (ok #'+))
+                      0)))
+    ;; Returns default when parser fails
+    (t:is = 0 (parse-string expr "abc"))
+    (t:is = 0 (parse-string expr ""))
+    ;; Normal operation
+    (t:is = 10 (parse-string expr "10"))
+    (t:is = 15 (parse-string expr "10+5"))))
+
+(t:define-test chainr
+  :depends-on (chainr1)
+  (let* ((pow (lambda (b e) (expt b e)))
+         (expr (chainr (natural)
+                       (prog2! (char-of #\^) (ok pow))
+                       1)))
+    ;; Returns default when parser fails
+    (t:is = 1 (parse-string expr "abc"))
+    (t:is = 1 (parse-string expr ""))
+    ;; Normal operation
+    (t:is = 10 (parse-string expr "10"))
+    (t:is = 8 (parse-string expr "2^3"))))
+
 (t:define-test string-vs-try-string
   :depends-on (string-of try! or!)
   (let ((boot (string-of "boot"))

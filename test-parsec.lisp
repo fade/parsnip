@@ -155,6 +155,35 @@
     ;; 2^3^2 = 2^(3^2) = 2^9 = 512 (right assoc)
     (tt:is equal 512 (parse-string expr "2^3^2"))))
 
+(tt:define-test "parsec.expression-parser-postfix"
+  ;; Factorial-like postfix operator
+  (let ((expr (build-expression-parser
+               (list (list (postfix (progn! (char-of #\!) (ok (lambda (n)
+                                                                (loop for i from 1 to n
+                                                                      for r = 1 then (* r i)
+                                                                      finally (return r))))))))
+               (natural))))
+    (tt:is equal 120 (parse-string expr "5!"))
+    (tt:is equal 5 (parse-string expr "5"))))
+
+(tt:define-test "parsec.expression-parser-assoc-none"
+  ;; Non-associative comparison operator - should parse a single use but not chain
+  (let ((expr (build-expression-parser
+               (list (list (infix (progn! (char-of #\=) (ok (lambda (a b) (list := a b))))
+                                  (assoc-none))))
+               (natural))))
+    (tt:is equal '(:= 1 2) (parse-string expr "1=2"))
+    (tt:is equal 5 (parse-string expr "5"))))
+
+(tt:define-test "parsec.get-input"
+  ;; get-input returns the underlying stream without consuming
+  (let ((result (parse-string (let! ((s (get-input))
+                                     (c (any-char)))
+                                (ok (list (streamp s) c)))
+                              "abc")))
+    (tt:is equal t (first result))
+    (tt:is equal #\a (second result))))
+
 ;;; ============================================================
 ;;; Token Parser Tests
 ;;; ============================================================
@@ -175,6 +204,20 @@
     (tt:is equal -5 (parse-string (token-parser-integer tp) "-5"))
     ;; Symbol
     (tt:is equal "+" (parse-string (funcall (token-parser-symbol tp) "+") "+"))))
+
+(tt:define-test "parsec.deftoken"
+  (let* ((lang (make-language-def
+                :comment-line "//"
+                :ident-start (letter)
+                :ident-letter (or! (alpha-num) (char-of #\_))
+                :reserved-names '("let" "in")
+                :case-sensitive t))
+         (tp (make-token-parser lang)))
+    ;; deftoken creates a function that returns the accessor's parser
+    (deftoken test-natural tp token-parser-natural)
+    (deftoken test-integer tp token-parser-integer)
+    (tt:is equal 42 (parse-string (test-natural) "42"))
+    (tt:is equal -7 (parse-string (test-integer) "-7"))))
 
 ;;; ============================================================
 ;;; Permutation Parser Tests
