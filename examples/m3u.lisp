@@ -1,4 +1,7 @@
 ;;; examples/m3u.lisp - M3U Playlist Parser Example
+
+;;; Copyright 2026 Brian O'Reilly <fade@deepsky.com>
+;;; BSD-3-Clause
 ;;;
 ;;; This example demonstrates a more complex parser for the M3U playlist format,
 ;;; showcasing a wide range of `parsnip` combinators, including the newly added
