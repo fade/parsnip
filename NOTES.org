@@ -1,0 +1,238 @@
+#+TITLE: Parsnip Enhancement Notes - Adding Parsec Features
+#+AUTHOR: Brian O'Reilly
+#+DATE: 2026-02-01
+
+* Overview
+
+This document tracks the effort to add missing Parsec combinators and features to Parsnip.
+
+* Comparison: Parsec vs Parsnip
+
+** What Parsnip Already Has (Parsec Equivalents)
+
+| Parsnip         | Parsec        | Notes                    |
+|-----------------+---------------+--------------------------|
+| ok              | return/pure   | ✓                        |
+| fail            | parserFail    | ✓                        |
+| char-if         | satisfy       | ✓                        |
+| char-of         | char          | ✓                        |
+| char-in         | oneOf         | ✓                        |
+| none-of         | noneOf        | ✓                        |
+| string-of       | string        | ✓                        |
+| eof             | eof           | ✓                        |
+| any-char        | anyChar       | ✓                        |
+| a-space         | space         | ✓                        |
+| spaces          | spaces        | ✓                        |
+| newline         | newline       | ✓                        |
+| tab             | tab           | ✓                        |
+| upper           | upper         | ✓                        |
+| lower           | lower         | ✓                        |
+| alpha-num       | alphaNum      | ✓                        |
+| letter          | letter        | ✓                        |
+| hex-digit       | hexDigit      | ✓                        |
+| oct-digit       | octDigit      | ✓                        |
+| crlf            | crlf          | ✓                        |
+| end-of-line     | endOfLine     | ✓                        |
+| flatmap         | >>= (bind)    | ✓                        |
+| let!            | do notation   | ✓                        |
+| try!            | try           | ✓                        |
+| or!             | <\vert>       | ✓                        |
+| choice          | choice        | ✓                        |
+| between         | between       | ✓                        |
+| collect/many    | many          | ✓                        |
+| collect1/many1  | many1         | ✓                        |
+| sep-by          | sepBy         | ✓                        |
+| sep             | sepBy1        | ✓ (different name)       |
+| end-by          | endBy         | ✓                        |
+| end-by1         | endBy1        | ✓                        |
+| parse-count     | count         | ✓                        |
+| many-till       | manyTill      | ✓                        |
+| skip-many       | skipMany      | ✓                        |
+| optional        | optionMaybe   | ✓ (returns nil vs Maybe) |
+| lookahead       | lookAhead     | ✓                        |
+| not-followed-by | notFollowedBy | ✓                        |
+| chainl          | chainl        | ✓                        |
+| chainl1         | chainl1       | ✓                        |
+| chainr          | chainr        | ✓                        |
+| chainr1         | chainr1       | ✓                        |
+| digit           | digit         | Parsnip supports radix   |
+| natural         | (in Token)    | ✓                        |
+| an-integer      | (in Token)    | ✓                        |
+| a-float         | (in Token)    | ✓                        |
+
+** What Parsec Has That Parsnip Lacks
+
+*** 1. Error Labeling (~<?>~, ~label~, ~labels~)
+Custom error messages attached to parsers. When a parser fails, the label replaces the default expected message.
+#+begin_src haskell
+digit <?> "digit"  -- On failure: "expected digit"
+#+end_src
+
+*** 2. ~unexpected~
+Explicitly fail with an "unexpected X" message rather than "expected Y".
+
+*** 3. ~option~ (with default value)
+Like ~optional~ but returns a user-specified default instead of Nothing/nil.
+#+begin_src haskell
+option 0 number  -- Returns 0 if number fails
+#+end_src
+
+*** 4. ~sepEndBy~ / ~sepEndBy1~
+Parse values separated by separator, with optional trailing separator. Handles ~a,b,c~ and ~a,b,c,~ equally.
+
+*** 5. ~skipMany1~
+Like ~skipMany~ but requires at least one match. Parsnip has ~skip-many~ but not ~skip-many1~.
+
+*** 6. ~anyToken~
+Accept any single token from the stream (generic, not just characters).
+
+*** 7. User State Management
+- ~getState~ / ~putState~ / ~modifyState~ - Thread user-defined state through parsing
+- Parsnip has no user state mechanism
+
+*** 8. Parser State Access
+- ~getPosition~ / ~setPosition~ - Read/write source position
+- ~getInput~ / ~setInput~ - Read/write remaining input
+- ~getParserState~ / ~setParserState~ / ~updateParserState~ - Full state access
+
+*** 9. Expression Parser (~Text.Parsec.Expr~)
+- ~buildExpressionParser~ - Build expression parsers from operator tables
+- ~Operator~ type with ~Infix~, ~Prefix~, ~Postfix~ constructors
+- ~Assoc~ enum: ~AssocNone~, ~AssocLeft~, ~AssocRight~
+- Handles precedence levels automatically
+
+*** 10. Token/Lexer Framework (~Text.Parsec.Token~)
+- ~GenLanguageDef~ - Define language syntax (comments, identifiers, operators, reserved words)
+- ~makeTokenParser~ - Generate a full lexer from language definition
+- Generated parsers: ~identifier~, ~reserved~, ~operator~, ~reservedOp~, ~charLiteral~, ~stringLiteral~, ~natural~, ~integer~, ~float~, ~naturalOrFloat~, ~decimal~, ~hexadecimal~, ~octal~, ~symbol~, ~lexeme~, ~whiteSpace~
+- Bracket parsers: ~parens~, ~braces~, ~angles~, ~brackets~
+- Delimiter parsers: ~semi~, ~comma~, ~colon~, ~dot~
+- List parsers: ~semiSep~, ~semiSep1~, ~commaSep~, ~commaSep1~
+
+*** 11. Permutation Parsing (~Text.Parsec.Perm~)
+Parse elements in any order. Useful for command-line flags, XML attributes, etc.
+- ~permute~ - Convert permutation parser to regular parser
+- ~<$$>~, ~<||>~, ~<$?>~, ~<|?>~ - Build permutation parsers
+
+*** 12. Debugging Combinators
+- ~parserTrace~ - Print remaining input (impure, for debugging)
+- ~parserTraced~ - Trace parser execution with backtrack indication
+
+*** 13. Predefined Language Definitions (~Text.Parsec.Language~)
+- ~haskellStyle~, ~javaStyle~, ~emptyDef~ - Comment/identifier styles
+- ~haskellDef~, ~haskell~ - Full Haskell tokenizer
+- ~mondrianDef~, ~mondrian~ - Mondrian language
+
+*** 14. Multiple Parser Runners
+- ~parse~ - Simple runner
+- ~parseTest~ - Print results to stdout
+- ~runParser~ / ~runParserT~ - With user state
+- ~runP~ / ~runPT~ - Low-level runners
+
+* Implementation Priority
+
+1. *Error labeling* (~<?>~) - Critical for good error messages
+2. *~option~* - Common pattern, easy to add
+3. *~sepEndBy~ / ~sepEndBy1~* - Frequently needed for real parsers
+4. *~skipMany1~* - Simple addition
+5. *User state* - Needed for context-sensitive parsing
+6. *Position/input access* - Useful for error recovery and debugging
+7. *Expression parser* - Major feature for language implementations
+8. *Token/Lexer framework* - Major feature for language implementations
+9. *Permutation parsing* - Specialized but useful
+10. *Debugging combinators* - Nice to have
+11. *Predefined languages* - Optional, can be user-defined
+
+* Implementation Progress
+
+** DONE Error labeling (~label~, ~<?>~ equivalent)
+** DONE ~unexpected~ combinator
+** DONE ~option~ combinator
+** DONE ~sepEndBy~ / ~sepEndBy1~ (as ~sep-end-by~ / ~sep-end-by1~)
+** DONE ~skipMany1~ (as ~skip-many1~)
+** PARTIAL User state management (not implemented - would require API changes)
+** DONE Position/input access (~get-position~, ~get-line~, ~get-column~, ~get-input~)
+** DONE Expression parser module (~build-expression-parser~, ~infix~, ~prefix~, ~postfix~)
+** DONE Token/Lexer framework (~make-token-parser~, ~language-def~)
+** DONE Permutation parsing (~permute~, ~perm-req~, ~perm-opt~)
+** DONE Debugging combinators (~parser-trace~, ~parser-traced~)
+
+** Test Results
+
+| Test Suite              | Tests | Status      |
+|-------------------------+-------+-------------|
+| parsnip/test            |   146 | All passing |
+| parsnip/test-json       |    22 | All passing |
+| parsnip/test-literals   |    48 | All passing |
+| parsnip/test-parsec     |    48 | All passing |
+| parsnip/test-m3u        |    26 | All passing |
+| *Total*                 | *290* | *Passing*   |
+
+*** Running Tests
+
+#+begin_src lisp
+(asdf:test-system :parsnip/test)
+(asdf:test-system :parsnip/test-literals)
+(asdf:test-system :parsnip/test-parsec)
+#+end_src
+
+*** Test Coverage for New Features (test-parsec.lisp)
+
+The ~parsnip/test-parsec~ system provides coverage for all new Parsec-compatible combinators:
+
+| Feature                 | Test Name                            | What's Tested                                     |
+|-------------------------+--------------------------------------+---------------------------------------------------|
+| ~label~                   | parsec.label                         | Error message replacement, success passthrough    |
+| ~unexpected~              | parsec.unexpected                    | Failure with "unexpected" message                 |
+| ~option~                  | parsec.option                        | Default value on failure, parsed value on success |
+| ~sep-end-by~              | parsec.sep-end-by                    | Zero/one/many items, trailing separator optional  |
+| ~sep-end-by1~             | parsec.sep-end-by1                   | One or more items, trailing separator optional    |
+| ~skip-many1~              | parsec.skip-many1                    | Requires at least one match, returns nil          |
+| ~get-line~                | parsec.get-line                      | Line tracking across newlines                     |
+| ~get-column~              | parsec.get-column                    | Column tracking (char-based parsers only)         |
+| ~get-position~            | parsec.get-position                  | Full position tuple                               |
+| ~build-expression-parser~ | parsec.expression-parser-basic       | Simple left-associative operators                 |
+|                         | parsec.expression-parser-precedence  | Operator precedence levels                        |
+|                         | parsec.expression-parser-prefix      | Prefix unary operators                            |
+|                         | parsec.expression-parser-right-assoc | Right-associative operators (exponentiation)      |
+| ~make-token-parser~       | parsec.token-parser-basic            | Natural, integer, symbol parsing                  |
+| ~permute~                 | parsec.permute-basic                 | Parse elements in any order                       |
+|                         | parsec.permute-optional              | Optional elements with defaults                   |
+| ~parser-trace~            | parsec.parser-trace                  | Debug output, no input consumption                |
+| ~parser-traced~           | parsec.parser-traced                 | Wrapped parser tracing                            |
+
+*** Known Limitations
+
+- ~string-of~ uses ~read-sequence~ for performance and does not update line/column tracking per-character
+- User state management not implemented (would require significant API changes to thread state through all parsers)
+
+*** Caveats
+
+I have updated parsnip to bring it in-line with the facilities defined
+in the Haskell system called parsec. In doing so, I have broadened the
+surface area of parsnip, and increased the complexity in the system. I
+have endeavoured to add test coverage for all of these components, in
+line with the standards defined by the base system in Samuel Hunter's
+master branch on sourcehut, but it is unclear to me how I will
+proceed. I would like to contribute the changes upstream, but I don't
+have the time to figure out how to get emacs to spit out a patch in
+unified diff format, or follow the procedure for sending this patch to
+SourceHut at the moment. Perhaps I will email Samuel Hunter and ask
+him if he would even be open to that. Regardless, all of this code is
+open source under the terms of the original license (BSD 3 Clause), so
+you may do with it what you want. My concern is that I have stretched
+the system beyond the original author's desired shape. Some of this
+was to scratch my own itch, which was parsing m3u files (an
+ill-specified format by consensus of what exists in the world) and
+partly to bootstrap my own understanding of parser/combinators. In
+pursuit of the later, almost all of the pedagogy that I found was
+written in the terms of Haskell in general and Parsec in particular,
+so I extended parsnip to match parsec (as much as possible) as I went,
+such that my excercise solutions would at least match the source
+material. I believe this has resulted in a system with more
+convenience and utility, but obviously all of the exciting new bugs
+are my own. Probably you shouldn't bother Samuel Hunter about them.
+Send issues/patch requests/messages via the facilities of the place
+where you found this code.
+
+-Brian O'Reilly, February 1, 2026.

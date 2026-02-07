@@ -1,0 +1,66 @@
+name: Run Tests
+
+on:
+  push:
+    branches: ['*']
+  pull_request:
+    branches: ['*']
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        lisp: [sbcl, ccl]
+
+    name: Test (${{ matrix.lisp }})
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install SBCL
+        if: matrix.lisp == 'sbcl'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sbcl
+
+      - name: Install CCL
+        if: matrix.lisp == 'ccl'
+        run: |
+          curl -L -o /tmp/ccl.tar.gz https://github.com/Clozure/ccl/releases/download/v1.13/ccl-1.13-linuxx86.tar.gz
+          tar xzf /tmp/ccl.tar.gz -C /usr/local/
+          sudo ln -s /usr/local/ccl/scripts/ccl64 /usr/local/bin/ccl
+
+      - name: Install Quicklisp
+        run: |
+          curl -o /tmp/quicklisp.lisp https://beta.quicklisp.org/quicklisp.lisp
+          if [ "${{ matrix.lisp }}" = "sbcl" ]; then
+            sbcl --non-interactive \
+              --load /tmp/quicklisp.lisp \
+              --eval '(quicklisp-quickstart:install)' \
+              --eval '(ql:add-to-init-file)'
+          else
+            ccl --batch \
+              --load /tmp/quicklisp.lisp \
+              --eval '(quicklisp-quickstart:install)' \
+              --eval '(ql:add-to-init-file)' \
+              --eval '(ccl:quit)'
+          fi
+
+      - name: Run All Tests (SBCL)
+        if: matrix.lisp == 'sbcl'
+        run: |
+          sbcl --non-interactive \
+            --eval '(push (truename ".") asdf:*central-registry*)' \
+            --eval '(ql:quickload :parsnip/test-all)' \
+            --eval '(asdf:test-system :parsnip/test-all)'
+
+      - name: Run All Tests (CCL)
+        if: matrix.lisp == 'ccl'
+        run: |
+          ccl --batch \
+            --eval '(push (truename ".") asdf:*central-registry*)' \
+            --eval '(ql:quickload :parsnip/test-all)' \
+            --eval '(asdf:test-system :parsnip/test-all)' \
+            --eval '(ccl:quit)'

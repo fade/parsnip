@@ -1,20 +1,19 @@
 ;;; test.lisp - Parsnip library test suite
 
 ;;; Copyright 2021 Samuel Hunter <samuel (at) shunter (dot) xyz>
+;;; Copyright 2026 Brian O'Reilly <fade@deepsky.com>
 ;;; BSD-3-Clause
 
 (defpackage #:xyz.shunter.parsnip.test
   (:use #:cl
-        #:xyz.shunter.parsnip
-        #:xyz.shunter.parsnip.examples.json
-        #:xyz.shunter.parsnip.examples.tiny-c)
+        #:xyz.shunter.parsnip)
   (:import-from #:alexandria
                 #:curry)
   (:local-nicknames (#:t #:parachute)))
 
 (in-package #:xyz.shunter.parsnip.test)
 
-
+
 
 (defun parse-string (parser string)
   (with-input-from-string (stream string)
@@ -32,8 +31,6 @@
   (let ((difference (abs (/ (- float-1 float-2) (abs (+ float-1 float-2)) 2)))
         (tolerance 0.0005))
     (< difference tolerance)))
-
-
 
 ;; Unit Tests
 
@@ -447,175 +444,232 @@
     (t:is equal 1
           (parse-string parser ""))))
 
-
 
-;; JSON Tests
 
-(t:define-test json-numbers
-  (t:is = 123
-      (decode-json-from-string "123"))
+;;; New Combinator Tests
 
-  (t:is = 50
-      (decode-json-from-string "000050"))
+(t:define-test choice
+  :depends-on (or!)
+  (let ((a-or-b-or-c (choice (list (char-of #\a)
+                                 (char-of #\b)
+                                 (char-of #\c)))))
+    (t:is char= #\a (parse-string a-or-b-or-c "a"))
+    (t:is char= #\b (parse-string a-or-b-or-c "b"))
+    (t:is char= #\c (parse-string a-or-b-or-c "c"))
+    (t:fail (parse-string a-or-b-or-c "d") 'parser-error)))
 
-  (t:is = -123
-      (decode-json-from-string "-123"))
+(t:define-test many-till
+  :depends-on (collect try!)
+  (let ((parser (many-till (char-of #\a) (char-of #\b))))
+    (t:is equal '(#\a #\a) (parse-string parser "aab"))
+    (t:is equal '() (parse-string parser "b"))
+    (t:fail (parse-string parser "aa") 'parser-error)))
 
-  (t:is close-enough 1.5
-      (decode-json-from-string "1.5"))
+(t:define-test optional
+  :depends-on (or! ok)
+  (let ((parser (optional (string-of "hello"))))
+    (t:is string= "hello" (parse-string parser "hello"))
+    (t:is eq nil (parse-string parser "world"))
+    (t:is eq nil (parse-string parser ""))))
 
-  (t:is close-enough 1.05
-      (decode-json-from-string "1.05"))
+(t:define-test lookahead
+  :depends-on (try!)
+  (let ((parser (let! ((a (lookahead (string-of "abc")))
+                       (b (string-of "abc")))
+                  (ok (list a b)))))
+    (t:is equal '("abc" "abc") (parse-string parser "abc")))
+  (let ((parser (lookahead (string-of "a"))))
+    (with-input-from-string (s "a")
+      (parse parser s)
+      (t:is char= #\a (read-char s)))))
 
-  (t:is close-enough 1e5
-      (decode-json-from-string "1e5"))
+(t:define-test not-followed-by
+  :depends-on (try! ok fail)
+  (let ((parser (prog1! (string-of "a")
+                        (not-followed-by (string-of "b")))))
+    (t:is string= "a" (parse-string parser "ac"))
+    (t:fail (parse-string parser "ab") 'parser-error))
+  (with-input-from-string (s "a")
+    (parse (not-followed-by (string-of "b")) s)
+    (t:is char= #\a (read-char s))))
 
-  (t:is close-enough 1e5
-      (decode-json-from-string "1e+5"))
+(t:define-test digit
+  :depends-on (char-if)
+  (t:is = 7 (parse-string (digit) "7"))
+  (t:is = 15 (parse-string (digit 16) "f"))
+  (t:fail (parse-string (digit) "a") 'parser-error))
 
-  (t:is close-enough 1e-5
-      (decode-json-from-string "1e-5"))
+(t:define-test chainl1
+  :depends-on (or! let! ok digit)
+  (let ((expr (chainl1 (natural)
+                       (choice (list (prog2! (char-of #\+) (ok #'+))
+                                     (prog2! (char-of #\-) (ok #'-)))))))
+    (t:is = 10 (parse-string expr "10"))
+    (t:is = 15 (parse-string expr "10+5"))
+    (t:is = 8 (parse-string expr "10-2"))
+    (t:is = 6 (parse-string expr "10-2-2"))))
 
-  (t:is close-enough 15.0
-      (decode-json-from-string "1.5e1")))
+(t:define-test chainr1
+  :depends-on (or! let! ok digit)
+  (let* ((pow (lambda (b e) (expt b e)))
+         (pow-op (prog2! (char-of #\^) (ok pow)))
+         (expr (chainr1 (natural) pow-op)))
+    (t:is = 10 (parse-string expr "10"))
+    (t:is = 1000 (parse-string expr "10^3"))
+    (t:is = 256 (parse-string expr "4^2^2")) ; 4^(2^2), not (4^2)^2
+    ))
 
-(t:define-test json-strings
-  (t:is string= "hello, world"
-      (decode-json-from-string "\"hello, world\""))
+    
 
-  (t:is string= (coerce #(#\" #\\ #\/ #\Backspace #\Page #\Newline #\Return #\Tab) 'string)
-      (decode-json-from-string "\"\\\"\\\\\\/\\b\\f\\n\\r\\t\""))
+(t:define-test none-of
+  :depends-on (char-if)
+  (t:is char= #\z
+        (parse-string (none-of "abc") "z"))
+  (t:is char= #\1
+        (parse-string (none-of "abc") "1"))
+  (t:fail (parse-string (none-of "abc") "a")
+          'parser-error)
+  (t:fail (parse-string (none-of "abc") "b")
+          'parser-error)
+  (t:fail (parse-string (none-of "abc") "c")
+          'parser-error)
+  (t:fail (parse-string (none-of "abc") "")
+          'parser-error)
+  ;; Works with vectors too
+  (t:is char= #\d
+        (parse-string (none-of #(#\a #\b #\c)) "d"))
+  (t:fail (parse-string (none-of #(#\a #\b #\c)) "a")
+          'parser-error))
 
-  (t:is string= "(λ (n) (* n n))"
-      (decode-json-from-string "\"(\\u03BB (n) (* n n))\"")))
+(t:define-test between
+  :depends-on (char-of)
+  (t:is char= #\b
+        (parse-string (between (char-of #\() (char-of #\b) (char-of #\))) "(b)"))
+  (t:fail (parse-string (between (char-of #\() (char-of #\b) (char-of #\))) "b)")
+          'parser-error)
+  (t:fail (parse-string (between (char-of #\() (char-of #\b) (char-of #\))) "(b")
+          'parser-error)
+  ;; Works with string parsers
+  (t:is string= "hello"
+        (parse-string (between (char-of #\[) (string-of "hello") (char-of #\])) "[hello]")))
 
-(t:define-test json-arrays
-  :depends-on (json-numbers json-strings)
-  (t:is equal '(10 20 30)
-      (decode-json-from-string "[10,20,30]"))
+(t:define-test sep-by
+  :depends-on (sep)
+  (let ((as (sep-by (char-of #\a) (char-of #\,))))
+    ;; Zero items is ok (unlike sep)
+    (t:is equal '()
+          (parse-string as ""))
+    (t:is equal '()
+          (parse-string as "z"))
+    ;; One or more
+    (t:is equal '(#\a)
+          (parse-string as "a"))
+    (t:is equal '(#\a #\a #\a)
+          (parse-string as "a,a,a"))))
 
-  (t:is equal '(10)
-      (decode-json-from-string "[10]"))
+(t:define-test end-by
+  :depends-on (collect)
+  (let ((as (end-by (char-of #\a) (char-of #\;))))
+    ;; Zero items
+    (t:is equal '()
+          (parse-string as ""))
+    (t:is equal '()
+          (parse-string as "z"))
+    ;; Items must be followed by separator
+    (t:is equal '(#\a)
+          (parse-string as "a;"))
+    (t:is equal '(#\a #\a #\a)
+          (parse-string as "a;a;a;"))
+    ;; Without trailing sep on last item, it's a consumed failure
+    (t:fail (parse-string as "a;a")
+            'parser-error)))
 
-  (t:is equal ()
-      (decode-json-from-string "[]"))
+(t:define-test end-by1
+  :depends-on (collect1)
+  (let ((as (end-by1 (char-of #\a) (char-of #\;))))
+    ;; Must have at least one
+    (t:fail (parse-string as "")
+            'parser-error)
+    (t:fail (parse-string as "z")
+            'parser-error)
+    ;; One or more
+    (t:is equal '(#\a)
+          (parse-string as "a;"))
+    (t:is equal '(#\a #\a)
+          (parse-string as "a;a;"))))
 
-  (t:is equal '(10 "string" (20 30 40))
-      (decode-json-from-string "[10, \"string\", [20, 30, 40]]"))
+(t:define-test parse-count
+  :depends-on (char-of)
+  ;; Zero count returns empty list
+  (t:is equal '()
+        (parse-string (parse-count 0 (char-of #\a)) "aaa"))
+  ;; Exact count
+  (t:is equal '(#\a)
+        (parse-string (parse-count 1 (char-of #\a)) "aaa"))
+  (t:is equal '(#\a #\a #\a)
+        (parse-string (parse-count 3 (char-of #\a)) "aaa"))
+  ;; Fails if not enough input
+  (t:fail (parse-string (parse-count 3 (char-of #\a)) "aa")
+          'parser-error)
+  ;; Doesn't consume more than N
+  (t:is equal '(#\a #\a)
+        (parse-string (parse-count 2 (char-of #\a)) "aaaa")))
 
-  (t:is equal '(10 20 30)
-      (decode-json-from-string " [ 10 , 20 , 30 ] ")))
+(t:define-test chainl
+  :depends-on (chainl1)
+  (let ((expr (chainl (natural)
+                      (prog2! (char-of #\+) (ok #'+))
+                      0)))
+    ;; Returns default when parser fails
+    (t:is = 0 (parse-string expr "abc"))
+    (t:is = 0 (parse-string expr ""))
+    ;; Normal operation
+    (t:is = 10 (parse-string expr "10"))
+    (t:is = 15 (parse-string expr "10+5"))))
 
-(t:define-test json-objects
-  :depends-on (json-numbers json-strings)
-  (t:is equal '(("key" . "value"))
-      (decode-json-from-string "{\"key\":\"value\"}"))
+(t:define-test chainr
+  :depends-on (chainr1)
+  (let* ((pow (lambda (b e) (expt b e)))
+         (expr (chainr (natural)
+                       (prog2! (char-of #\^) (ok pow))
+                       1)))
+    ;; Returns default when parser fails
+    (t:is = 1 (parse-string expr "abc"))
+    (t:is = 1 (parse-string expr ""))
+    ;; Normal operation
+    (t:is = 10 (parse-string expr "10"))
+    (t:is = 8 (parse-string expr "2^3"))))
 
-  (t:is equal '(("one" . 1) ("two" . 2) ("three" . 3))
-      (decode-json-from-string "{\"one\":1,\"two\":2,\"three\":3}"))
+(t:define-test string-vs-try-string
+  :depends-on (string-of try! or!)
+  (let ((boot (string-of "boot"))
+        (bool (string-of "bool"))
+        (try-boot (try! (string-of "boot")))
+        (try-bool (try! (string-of "bool"))))
 
-  (t:is equal '(("object" . (("key" . "value"))))
-      (decode-json-from-string "{\"object\":{\"key\":\"value\"}}"))
+    ;; string-of consumes input on failure, so the second branch of or! is not tried
+    (t:is string= "boot" (parse-string (or! boot bool) "boot"))
+    (t:fail (parse-string (or! boot bool) "bool") 'parser-error)
+    (t:fail (parse-string (or! boot bool) "booz") 'parser-error)
 
-  (t:is equal '(("key" . "value") ("foo" . "bar"))
-      (decode-json-from-string " { \"key\" : \"value\" , \"foo\" : \"bar\" }"))
+    ;; try! rewinds on failure, so the second branch of or! is tried
+    (t:is string= "boot" (parse-string (or! try-boot try-bool) "boot"))
+    (t:is string= "bool" (parse-string (or! try-boot try-bool) "bool"))
+    (t:fail (parse-string (or! try-boot try-bool) "booz") 'parser-error)))
 
-  (t:is equal '(("key" . "value") ("foo" . "bar"))
-        (decode-json-from-string
-          (format nil "{~%  \"key\": \"value\",~%  \"foo\": \"bar\"~%}"))))
+(defun mappend-parser (p1 p2)
+  (let! ((r1 p1)
+         (r2 p2))
+    (ok (concatenate 'string r1 r2))))
 
-
-
-;; Tiny C Tests
-
-(t:define-test c-function
-  (t:is equal '((:function "empty" ()))
-        (parse-tiny-c-from-string
-          "empty(){}"))
-
-  (t:is equal '((:function "empty" ()))
-        (parse-tiny-c-from-string
-          "  empty  (  )  {  }  "))
-
-  (t:is equal '((:function "emptyWithArg" ("a")))
-        (parse-tiny-c-from-string
-          "emptyWithArg(a) {}"))
-
-  (t:is equal '((:function "emptyWithArgs" ("a" "b" "c")))
-        (parse-tiny-c-from-string
-          "emptyWithArgs(a, b, c) {}")))
-
-(t:define-test c-statements
-  (t:is equal '((:function "block" ()
-                 (:block)
-                 (:block)
-                 (:block (:block) (:block))))
-        (parse-tiny-c-from-string
-          "block() { {} {  }  {{}{}} }"))
-
-  (t:is equal '((:function "returnFn" ()
-                 (:return 10)
-                 (:return 20)
-                 (:return "a")))
-        (parse-tiny-c-from-string
-          "returnFn() { return 10; return 20;    return     a   ; }"))
-
-  (t:is equal '((:function "whileFn" ()
-                 (:while 1 (:block))
-                 (:while "a" (:while "b" (:expr "c")))))
-        (parse-tiny-c-from-string
-          "whileFn() { while (1) {}   while (a) while (b) c; }"))
-
-  (t:is equal '((:function "ifFn" ()
-                 (:if 1 (:block))
-                 (:if "a" (:if "b" (:expr "c")))))
-        (parse-tiny-c-from-string
-          "ifFn() { if (1) {}    if (a) if (b) c; }")))
-
-(t:define-test c-expressions
-  (t:is equal '((:function "primary" ()
-                 (:expr 10)
-                 (:expr "a")
-                 (:expr 10)))
-        (parse-tiny-c-from-string
-          "primary() { 10; a; (10); }"))
-
-  (t:is equal '((:function "calls" ()
-                 (:expr (:call "foo"))
-                 (:expr (:call "add" 1 2))
-                 (:expr (:call (:call (:call "fun"))))))
-        (parse-tiny-c-from-string
-          "calls() { foo(); add(1, 2); fun()()(); }"))
-
-  (t:is equal '((:function "binary" ()
-                 (:expr (#\+ 10 20))
-                 (:expr (#\* 30 40))
-                 (:expr ("==" 1 1))
-                 (:expr (#\+ (#\* 1 2) (#\* 3 4)))))
-        (parse-tiny-c-from-string
-          "binary() { 10 + 20;   30 * 40;   1 == 1;   1 * 2 + 3 * 4; }")))
-
-(t:define-test tiny-c-example
-  (t:is equal '((:function "fact" ("n")
-                 (:if ("==" "n" 0)
-                  (:return 1))
-                 (:return (#\* "n" (:call "fact" (#\- "n" 1)))))
-                (:function "fib" ("n")
-                 (:expr (:assign "a" 0))
-                 (:expr (:assign "b" 1))
-                 (:while (#\> "n" 0)
-                  (:block
-                    (:expr (:assign "b" (#\+ "b" "a")))
-                    (:expr (:assign "a" (#\- "b" "a")))
-                    (:expr (:assign "n" (#\- "n" 1)))))
-                 (:return "a"))
-                (:function "add" ("a" "b")
-                 (:return (#\+ "a" "b")))
-                (:function "main" ()
-                 (:expr (:call "sayn" (:call "fib" 10)))
-                 (:expr (:call "sayn" (:call "fact" 10)))
-                 (:return 0)))
-        (with-open-file (file (asdf:system-relative-pathname
-                                :parsnip/examples
-                                #P"examples/tiny-c.c"))
-          (parse-tiny-c file))))
+(t:define-test monoid-properties
+  :depends-on (ok collect-into-string string-of)
+  (let ((as (collect-into-string (char-of #\a)))
+        (bs (collect-into-string (char-of #\b)))
+        (str-a (string-of "a")))
+    (t:is string= "aabbb" (parse-string (mappend-parser as bs) "aabbb"))
+    (t:is string= "aa" (parse-string (mappend-parser (ok "") as) "aabbb"))
+    (t:is string= "aa" (parse-string (mappend-parser as (ok "")) "aabbb"))
+    (t:is string= "" (parse-string (ok "") "aabbb"))
+    (t:is string= "aa" (parse-string (mappend-parser str-a str-a) "aabbb"))
+    (t:fail (parse-string (mappend-parser str-a (mappend-parser str-a str-a)) "aabbb") 'parser-error)))
